@@ -1,19 +1,17 @@
 import os
+import time
 import pandas as pd
 import requests
 from dotenv import load_dotenv
 
-print("Script started")
-
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
-print("API key loaded:", "YES" if api_key else "NO - MISSING")
 
 df = pd.read_csv("IMDB Dataset.csv")
 sample = df.sample(20, random_state=42)
-print("Sample size:", len(sample))
 
-def classify_review(review_text):
+
+def classify_review(review_text, max_retries=3):
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -26,20 +24,36 @@ def classify_review(review_text):
         ],
         "temperature": 0
     }
-    response = requests.post(url, headers=headers, json=payload, timeout=15)
-    print("Status code:", response.status_code)
-    result = response.json()
 
-    if "choices" not in result:
-        print("ERROR RESPONSE:", result)
-        return "error"
+    # groq sometimes times out or errors randomly, so retrying a few times
+    # before giving up (learned this the hard way lol)
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=15)
+            result = response.json()
 
-    return result["choices"][0]["message"]["content"].strip().lower()
+            if "choices" in result:
+                return result["choices"][0]["message"]["content"].strip().lower()
+
+            print("no choices in response, something went wrong:", result)
+
+        except requests.exceptions.Timeout:
+            print("timed out, attempt", attempt + 1)
+        except requests.exceptions.ConnectionError:
+            print("connection error, attempt", attempt + 1)
+        except Exception as e:
+            # catching anything else just in case, will figure out what later
+            print("something broke:", e)
+
+        if attempt < max_retries - 1:
+            time.sleep(2)  # small wait before trying again
+
+    return "error"  # giving up after max_retries, mark it as error for now
+
 
 correct = 0
 total = 0
 
-print("Starting loop...")
 for index, row in sample.iterrows():
     predicted = classify_review(row["review"])
     actual = row["sentiment"]
