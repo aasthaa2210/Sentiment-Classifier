@@ -1,6 +1,6 @@
 import os
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import requests
 from dotenv import load_dotenv
 
@@ -9,8 +9,20 @@ api_key = os.getenv("GROQ_API_KEY")
 
 app = FastAPI()
 
+from pydantic import BaseModel, field_validator
+
 class ReviewRequest(BaseModel):
     text: str
+
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("text can't be empty")
+        if len(value) > 5000:
+            raise ValueError("text is too long, keep it under 5000 characters")
+        return value
 
 def classify_review(review_text):
     url = "https://api.groq.com/openai/v1/chat/completions"
