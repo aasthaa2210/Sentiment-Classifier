@@ -3,6 +3,13 @@ import time
 import pandas as pd
 import requests
 from dotenv import load_dotenv
+import logging
+
+logging.basicConfig(
+    filename="classifier.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
@@ -25,8 +32,6 @@ def classify_review(review_text, max_retries=3):
         "temperature": 0
     }
 
-    # groq sometimes times out or errors randomly, so retrying a few times
-    # before giving up (learned this the hard way lol)
     for attempt in range(max_retries):
         try:
             response = requests.post(url, headers=headers, json=payload, timeout=15)
@@ -35,19 +40,19 @@ def classify_review(review_text, max_retries=3):
             if "choices" in result:
                 return result["choices"][0]["message"]["content"].strip().lower()
 
-            print("no choices in response, something went wrong:", result)
+            logging.warning(f"No choices in response: {result}")
 
         except requests.exceptions.Timeout:
-            print("timed out, attempt", attempt + 1)
+            logging.warning(f"Timed out on attempt {attempt + 1}")
         except requests.exceptions.ConnectionError:
-            print("connection error, attempt", attempt + 1)
+            logging.warning(f"Connection error on attempt {attempt + 1}")
         except Exception as e:
-            # catching anything else just in case, will figure out what later
-            print("something broke:", e)
+            logging.error(f"Unexpected error: {e}")
 
         if attempt < max_retries - 1:
-            time.sleep(2)  # small wait before trying again
+            time.sleep(2)
 
+    logging.error(f"Failed after {max_retries} attempts for review: {review_text[:50]}...")
     return "error"  # giving up after max_retries, mark it as error for now
 
 
