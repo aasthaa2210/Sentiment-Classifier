@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, field_validator
 import requests
 from dotenv import load_dotenv
+from typing import List
 
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
@@ -45,3 +46,26 @@ def classify_review(review_text):
 def classify(request: ReviewRequest):
     sentiment = classify_review(request.text)
     return {"review": request.text, "sentiment": sentiment}
+
+from typing import List
+
+class BatchReviewRequest(BaseModel):
+    texts: List[str]
+
+    @field_validator("texts")
+    @classmethod
+    def validate_texts(cls, value):
+        if not value:
+            raise ValueError("texts list can't be empty")
+        if len(value) > 50:
+            raise ValueError("max 50 reviews per batch request")
+        return value
+
+
+@app.post("/classify-batch")
+def classify_batch(request: BatchReviewRequest):
+    results = []
+    for text in request.texts:
+        sentiment = classify_review(text)
+        results.append({"review": text, "sentiment": sentiment})
+    return {"results": results}
